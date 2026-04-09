@@ -9,7 +9,7 @@
     <array>
         <string>/bin/sh</string>
         <string>-c</string>
-        <string>set -a; . /Users/dan/slack2omnifocus/.env.local; exec /usr/local/bin/slack2omnifocus poll</string>
+        <string>set -a; . /Users/dan/slack2omnifocus/.env.local; exec /Users/dan/.local/bin/slack2omnifocus poll</string>
     </array>
 
     <key>StartInterval</key>
