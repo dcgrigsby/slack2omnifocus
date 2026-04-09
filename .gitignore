@@ -1,2 +1,15 @@
 # Isolated implementation worktrees
 .worktrees/
+
+# Build output
+/slack2omnifocus
+
+# Secrets — never commit
+.env.local
+.env
+
+# Launchd log files (written by the daemon, not tracked)
+/tmp/slack2omnifocus.*.log
+
+# Editor cruft
+.DS_Store
