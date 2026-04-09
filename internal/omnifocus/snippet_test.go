@@ -65,3 +65,20 @@ func TestBuildSnippet_containsRequiredJSElements(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildSnippet_escapesJSLineTerminators(t *testing.T) {
+	// U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR) are valid
+	// JSON string characters but are hard line terminators in ES5 source.
+	// An unescaped occurrence would make the generated snippet a syntax
+	// error. Go's encoding/json escapes them to \u2028/\u2029 by default;
+	// this test guards that assumption so the invariant doesn't silently
+	// rot if the encoder is ever swapped or reconfigured.
+	payload := TaskPayload{Name: "a\u2028b", Note: "c\u2029d"}
+	snippet, err := BuildSnippet(payload)
+	if err != nil {
+		t.Fatalf("BuildSnippet returned error: %v", err)
+	}
+	if strings.ContainsAny(snippet, "\u2028\u2029") {
+		t.Errorf("snippet contains raw U+2028 or U+2029; json.Marshal is expected to escape these:\n%s", snippet)
+	}
+}
