@@ -195,6 +195,44 @@ func TestRun_runnerFails_leavesReactionAndState(t *testing.T) {
 	}
 }
 
+func TestRun_reactionRemoveFails_stateStillMarked(t *testing.T) {
+	fs := &fakeSlack{
+		selfUserID: "USELF",
+		items: []SlackMessage{
+			{Channel: "C1", Timestamp: "1.0", AuthorUserID: "UAUTHOR", Text: "do the thing"},
+		},
+		displayNames: map[string]string{"UAUTHOR": "Alice"},
+		channelNames: map[string]string{"C1": "eng-backend"},
+		removeErr:    map[string]error{"C1:1.0": errors.New("network boom")},
+	}
+	fr := &fakeRunner{}
+	store := newStore(t)
+
+	// Per-message failures are logged, not returned. Run should succeed.
+	if err := Run(context.Background(), fs, fr, store, alwaysRunningTrue); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+
+	// Task WAS created before the (failed) reaction removal.
+	if len(fr.calls) != 1 {
+		t.Fatalf("runner calls = %d, want 1", len(fr.calls))
+	}
+
+	// Reaction removal was attempted exactly once.
+	if len(fs.removeCalls) != 1 {
+		t.Fatalf("removeCalls = %d, want 1", len(fs.removeCalls))
+	}
+
+	// Critical: state MUST be marked even though reaction removal failed.
+	// This is what guarantees the next poll retries only the removal and
+	// does not re-create the OmniFocus task. If someone ever swaps the
+	// order of store.Mark and slack.RemoveEyesReaction in handleMessage,
+	// this test will fail.
+	if !store.Has("C1", "1.0") {
+		t.Error("state should contain C1:1.0 even when reaction removal failed")
+	}
+}
+
 func TestRun_titleTruncation(t *testing.T) {
 	longText := "word word word word word word word word word word word word word word word word word word word"
 	fs := &fakeSlack{
