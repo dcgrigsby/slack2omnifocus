@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/dcgrigsby/slack2omnifocus/internal/config"
 	"github.com/dcgrigsby/slack2omnifocus/internal/omnifocus"
@@ -80,24 +81,34 @@ func runPoll() error {
 		return err
 	}
 
-	return poll.Run(context.Background(), adapter, runner, store, omnifocus.IsRunning)
+	// Bound the poll cycle so a stuck Slack call or a hung osascript
+	// cannot outlive its launchd slot. 4 minutes leaves 1 minute of
+	// headroom before the next 5-minute cycle fires.
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	return poll.Run(ctx, adapter, runner, store, omnifocus.IsRunning)
 }
 
 func runDoctor() error {
-	cfg, err := config.Load()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "✗ config:", err)
-		return err
-	}
-	fmt.Println("✓ SLACK_TOKEN loaded (prefix OK)")
+	failures := 0
 
-	client := slack.New(cfg.SlackToken)
-	userID, err := client.AuthTest(context.Background())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "✗ slack auth.test:", err)
-		return err
+	cfg, cfgErr := config.Load()
+	if cfgErr != nil {
+		fmt.Fprintln(os.Stderr, "✗ config:", cfgErr)
+		failures++
+	} else {
+		fmt.Println("✓ SLACK_TOKEN loaded (prefix OK)")
+
+		client := slack.New(cfg.SlackToken)
+		userID, err := client.AuthTest(context.Background())
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "✗ slack auth.test:", err)
+			failures++
+		} else {
+			fmt.Printf("✓ Slack auth.test OK (user_id=%s)\n", userID)
+		}
 	}
-	fmt.Printf("✓ Slack auth.test OK (user_id=%s)\n", userID)
 
 	if omnifocus.IsRunning() {
 		fmt.Println("✓ OmniFocus is running")
@@ -105,16 +116,19 @@ func runDoctor() error {
 		fmt.Println("⚠ OmniFocus is NOT running — poll will skip until it is")
 	}
 
-	statePath, err := defaultStatePath()
-	if err != nil {
+	if statePath, err := defaultStatePath(); err != nil {
 		fmt.Fprintln(os.Stderr, "✗ state path:", err)
-		return err
-	}
-	if _, err := state.Open(statePath); err != nil {
+		failures++
+	} else if _, err := state.Open(statePath); err != nil {
 		fmt.Fprintln(os.Stderr, "✗ state file:", err)
-		return err
+		failures++
+	} else {
+		fmt.Printf("✓ State file writable at %s\n", statePath)
 	}
-	fmt.Printf("✓ State file writable at %s\n", statePath)
+
+	if failures > 0 {
+		return fmt.Errorf("%d doctor check(s) failed", failures)
+	}
 	return nil
 }
 
