@@ -29,6 +29,7 @@ type SlackClient interface {
 	ListEyesReactions(ctx context.Context, selfUserID string) ([]SlackMessage, error)
 	DisplayName(ctx context.Context, userID string) (string, error)
 	ChannelName(ctx context.Context, channelID string) (string, error)
+	FormatText(ctx context.Context, text string) string
 	Permalink(ctx context.Context, channel, ts string) (string, error)
 	RemoveEyesReaction(ctx context.Context, channel, ts string) error
 }
@@ -120,9 +121,13 @@ func handleMessage(
 		return fmt.Errorf("resolve permalink: %w", err)
 	}
 
+	// Expand Slack entity references (<@U…>, <#C…>, <https://…|label>, …)
+	// into human-readable text so the task body doesn't contain raw IDs.
+	text := slack.FormatText(ctx, msg.Text)
+
 	payload := omnifocus.TaskPayload{
-		Name: buildTitle(msg.Text),
-		Note: buildNote(authorName, channelName, permalink, msg.Text),
+		Name: buildTitle(text),
+		Note: buildNote(authorName, channelName, permalink, text),
 	}
 
 	taskID, err := runner.CreateTask(payload)

@@ -41,6 +41,10 @@ func (a *PollAdapter) ChannelName(ctx context.Context, channelID string) (string
 	return a.Client.ChannelName(ctx, channelID)
 }
 
+func (a *PollAdapter) FormatText(ctx context.Context, text string) string {
+	return a.Client.FormatText(ctx, text)
+}
+
 func (a *PollAdapter) Permalink(ctx context.Context, channel, ts string) (string, error) {
 	return a.Client.Permalink(ctx, channel, ts)
 }

@@ -6,6 +6,8 @@ package slack
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 
 	slackgo "github.com/slack-go/slack"
 )
@@ -185,4 +187,76 @@ func (c *Client) RemoveEyesReaction(ctx context.Context, channel, ts string) err
 		return fmt.Errorf("slack reactions.remove: %w", err)
 	}
 	return nil
+}
+
+// slackEntityRe matches Slack's <...> entity references in message text.
+// Slack guarantees these are balanced and contain no nested < or >.
+// See https://api.slack.com/reference/surfaces/formatting#retrieving-messages
+var slackEntityRe = regexp.MustCompile(`<([^<>]+)>`)
+
+// FormatText expands Slack entity references in message text into
+// human-readable form:
+//
+//	<@U123>             → @<display_name>   (via users.info)
+//	<@U123|bob>         → @bob              (uses inline label)
+//	<#C123>             → #<channel_name>   (via conversations.info)
+//	<#C123|general>     → #general          (uses inline label)
+//	<!here|here>        → @here
+//	<!channel>          → @channel
+//	<!subteam^S1|@team> → @team             (uses inline label)
+//	<!date^…|Feb 18>    → Feb 18            (uses inline label)
+//	<https://url>       → https://url
+//	<https://url|text>  → text
+//	<mailto:a@b.com>    → a@b.com
+//	<mailto:a@b.com|A>  → A
+//
+// Lookup failures (network, missing scope, deleted user, etc.) fall back
+// to the raw ID with a readable prefix (e.g. "@U123" or "#C456") so one
+// unresolvable reference never blocks task creation.
+func (c *Client) FormatText(ctx context.Context, text string) string {
+	return slackEntityRe.ReplaceAllStringFunc(text, func(match string) string {
+		inner := match[1 : len(match)-1] // strip < and >
+		var label string
+		if i := strings.Index(inner, "|"); i >= 0 {
+			label = inner[i+1:]
+			inner = inner[:i]
+		}
+		if inner == "" {
+			return match
+		}
+		switch inner[0] {
+		case '@':
+			if label != "" {
+				return "@" + label
+			}
+			name, err := c.DisplayName(ctx, inner[1:])
+			if err != nil {
+				return "@" + inner[1:]
+			}
+			return "@" + name
+		case '#':
+			if label != "" {
+				return "#" + label
+			}
+			name, err := c.ChannelName(ctx, inner[1:])
+			if err != nil {
+				return "#" + inner[1:]
+			}
+			return "#" + name
+		case '!':
+			if label != "" {
+				// User groups, dates, and any other !command with an explicit
+				// label — the label already includes any @ prefix it needs.
+				return label
+			}
+			// Bare broadcasts: !here, !channel, !everyone.
+			return "@" + inner[1:]
+		default:
+			// URL or mailto.
+			if label != "" {
+				return label
+			}
+			return strings.TrimPrefix(inner, "mailto:")
+		}
+	})
 }

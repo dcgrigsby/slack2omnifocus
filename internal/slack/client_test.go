@@ -271,6 +271,181 @@ func TestRemoveEyesReaction_sendsCorrectRequest(t *testing.T) {
 	}
 }
 
+func TestFormatText_plainTextUnchanged(t *testing.T) {
+	c := newForTest(t, (&fakeSlackServer{}).start(t))
+	got := c.FormatText(context.Background(), "just some plain text with no entities")
+	if got != "just some plain text with no entities" {
+		t.Errorf("FormatText changed plain text: %q", got)
+	}
+}
+
+func TestFormatText_channelMentionWithInlineName(t *testing.T) {
+	// When Slack includes the |name after the ID, no API call is needed.
+	c := newForTest(t, (&fakeSlackServer{}).start(t))
+	got := c.FormatText(context.Background(), "see <#C123|general> for details")
+	if got != "see #general for details" {
+		t.Errorf("FormatText = %q, want %q", got, "see #general for details")
+	}
+}
+
+func TestFormatText_channelMentionResolvesViaAPI(t *testing.T) {
+	srv := (&fakeSlackServer{
+		handlers: map[string]http.HandlerFunc{
+			"/conversations.info": func(w http.ResponseWriter, r *http.Request) {
+				jsonOK(w, map[string]any{
+					"channel": map[string]any{
+						"id":   "C0ARY9XKNTU",
+						"name": "sharing-is-caring",
+					},
+				})
+			},
+		},
+	}).start(t)
+
+	c := newForTest(t, srv)
+	got := c.FormatText(context.Background(), "I started <#C0ARY9XKNTU> yesterday")
+	if got != "I started #sharing-is-caring yesterday" {
+		t.Errorf("FormatText = %q, want %q", got, "I started #sharing-is-caring yesterday")
+	}
+}
+
+func TestFormatText_userMentionWithInlineName(t *testing.T) {
+	c := newForTest(t, (&fakeSlackServer{}).start(t))
+	got := c.FormatText(context.Background(), "cc <@U123|bob>")
+	if got != "cc @bob" {
+		t.Errorf("FormatText = %q, want %q", got, "cc @bob")
+	}
+}
+
+func TestFormatText_userMentionResolvesViaAPI(t *testing.T) {
+	srv := (&fakeSlackServer{
+		handlers: map[string]http.HandlerFunc{
+			"/users.info": func(w http.ResponseWriter, r *http.Request) {
+				jsonOK(w, map[string]any{
+					"user": map[string]any{
+						"id": "U999",
+						"profile": map[string]any{
+							"display_name": "Alice",
+							"real_name":    "Alice Example",
+						},
+					},
+				})
+			},
+		},
+	}).start(t)
+
+	c := newForTest(t, srv)
+	got := c.FormatText(context.Background(), "hey <@U999> got a sec?")
+	if got != "hey @Alice got a sec?" {
+		t.Errorf("FormatText = %q, want %q", got, "hey @Alice got a sec?")
+	}
+}
+
+func TestFormatText_specialBroadcasts(t *testing.T) {
+	c := newForTest(t, (&fakeSlackServer{}).start(t))
+	cases := map[string]string{
+		"<!here> heads up":      "@here heads up",
+		"<!channel> announcing": "@channel announcing",
+		"<!everyone> notice":    "@everyone notice",
+	}
+	for in, want := range cases {
+		got := c.FormatText(context.Background(), in)
+		if got != want {
+			t.Errorf("FormatText(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestFormatText_userGroupUsesDisplayText(t *testing.T) {
+	// <!subteam^S123|@marketing> should render as the display text.
+	c := newForTest(t, (&fakeSlackServer{}).start(t))
+	got := c.FormatText(context.Background(), "ping <!subteam^S0123|@marketing>")
+	if got != "ping @marketing" {
+		t.Errorf("FormatText = %q, want %q", got, "ping @marketing")
+	}
+}
+
+func TestFormatText_dateUsesDisplayText(t *testing.T) {
+	// <!date^1392734382^{date_num}|Feb 18, 2014> → Feb 18, 2014
+	c := newForTest(t, (&fakeSlackServer{}).start(t))
+	got := c.FormatText(context.Background(), "on <!date^1392734382^{date_num}|Feb 18, 2014>")
+	if got != "on Feb 18, 2014" {
+		t.Errorf("FormatText = %q, want %q", got, "on Feb 18, 2014")
+	}
+}
+
+func TestFormatText_urlBare(t *testing.T) {
+	c := newForTest(t, (&fakeSlackServer{}).start(t))
+	got := c.FormatText(context.Background(), "see <https://example.com/path>")
+	if got != "see https://example.com/path" {
+		t.Errorf("FormatText = %q, want %q", got, "see https://example.com/path")
+	}
+}
+
+func TestFormatText_urlWithLabel(t *testing.T) {
+	c := newForTest(t, (&fakeSlackServer{}).start(t))
+	got := c.FormatText(context.Background(), "click <https://example.com|here>")
+	if got != "click here" {
+		t.Errorf("FormatText = %q, want %q", got, "click here")
+	}
+}
+
+func TestFormatText_mailto(t *testing.T) {
+	c := newForTest(t, (&fakeSlackServer{}).start(t))
+	got := c.FormatText(context.Background(), "email <mailto:bob@example.com>")
+	if got != "email bob@example.com" {
+		t.Errorf("FormatText = %q, want %q", got, "email bob@example.com")
+	}
+}
+
+func TestFormatText_mixedEntities(t *testing.T) {
+	srv := (&fakeSlackServer{
+		handlers: map[string]http.HandlerFunc{
+			"/conversations.info": func(w http.ResponseWriter, r *http.Request) {
+				jsonOK(w, map[string]any{
+					"channel": map[string]any{"id": "C1", "name": "general"},
+				})
+			},
+			"/users.info": func(w http.ResponseWriter, r *http.Request) {
+				jsonOK(w, map[string]any{
+					"user": map[string]any{
+						"id": "U1",
+						"profile": map[string]any{"display_name": "Carol"},
+					},
+				})
+			},
+		},
+	}).start(t)
+
+	c := newForTest(t, srv)
+	in := "<@U1> started <#C1> — see <https://docs.example.com|the docs>"
+	want := "@Carol started #general — see the docs"
+	got := c.FormatText(context.Background(), in)
+	if got != want {
+		t.Errorf("FormatText = %q, want %q", got, want)
+	}
+}
+
+func TestFormatText_lookupFailureFallsBackToID(t *testing.T) {
+	// users.info returns an error; FormatText must not propagate it —
+	// instead it should fall back to the raw ID with the @ prefix so the
+	// task still gets created.
+	srv := (&fakeSlackServer{
+		handlers: map[string]http.HandlerFunc{
+			"/users.info": func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"ok":false,"error":"user_not_found"}`))
+			},
+		},
+	}).start(t)
+
+	c := newForTest(t, srv)
+	got := c.FormatText(context.Background(), "cc <@UDELETED>")
+	if got != "cc @UDELETED" {
+		t.Errorf("FormatText = %q, want %q", got, "cc @UDELETED")
+	}
+}
+
 // helper to build a Client pointed at the fake server
 func newForTest(t *testing.T, fakeURL string) *Client {
 	t.Helper()

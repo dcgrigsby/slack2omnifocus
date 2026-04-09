@@ -22,6 +22,7 @@ type fakeSlack struct {
 	displayNames   map[string]string
 	channelNames   map[string]string
 	permalinks     map[string]string // keyed by "channel:ts"
+	formatReplace  map[string]string // text → expanded text
 }
 
 type ref struct {
@@ -46,6 +47,14 @@ func (f *fakeSlack) ChannelName(ctx context.Context, channelID string) (string, 
 		return n, nil
 	}
 	return channelID, nil
+}
+func (f *fakeSlack) FormatText(ctx context.Context, text string) string {
+	if f.formatReplace != nil {
+		if out, ok := f.formatReplace[text]; ok {
+			return out
+		}
+	}
+	return text
 }
 func (f *fakeSlack) Permalink(ctx context.Context, channel, ts string) (string, error) {
 	key := channel + ":" + ts
@@ -125,6 +134,42 @@ func TestRun_createsTaskAndRemovesReaction_happyPath(t *testing.T) {
 	}
 	if !store.Has("C1", "1.0") {
 		t.Error("store should contain C1:1.0 after successful run")
+	}
+}
+
+func TestRun_expandsSlackEntitiesInTitleAndNote(t *testing.T) {
+	// Verifies that FormatText's output is what gets passed to buildTitle
+	// and buildNote — i.e. the raw <#C0ARY9XKNTU> style references never
+	// reach the OmniFocus task.
+	raw := "check out <#C0ARY9XKNTU> and <@U123>"
+	expanded := "check out #sharing and @Bob"
+	fs := &fakeSlack{
+		selfUserID: "USELF",
+		items: []SlackMessage{
+			{Channel: "C1", Timestamp: "1.0", AuthorUserID: "UAUTHOR", Text: raw},
+		},
+		displayNames:  map[string]string{"UAUTHOR": "Alice"},
+		channelNames:  map[string]string{"C1": "eng-backend"},
+		formatReplace: map[string]string{raw: expanded},
+	}
+	fr := &fakeRunner{}
+	store := newStore(t)
+
+	if err := Run(context.Background(), fs, fr, store, alwaysRunningTrue); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if len(fr.calls) != 1 {
+		t.Fatalf("runner calls = %d, want 1", len(fr.calls))
+	}
+	payload := fr.calls[0]
+	if payload.Name != expanded {
+		t.Errorf("task name = %q, want %q (expanded text should be used as title)", payload.Name, expanded)
+	}
+	if !containsString(payload.Note, expanded) {
+		t.Errorf("note should contain expanded text %q:\n%s", expanded, payload.Note)
+	}
+	if containsString(payload.Note, raw) {
+		t.Errorf("note should NOT contain raw entity references:\n%s", payload.Note)
 	}
 }
 
