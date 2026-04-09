@@ -203,6 +203,45 @@ func TestDisplayName_fallsBackToRealNameThenID(t *testing.T) {
 	}
 }
 
+func TestChannelName_DMUsesCounterpartDisplayName(t *testing.T) {
+	srv := (&fakeSlackServer{
+		handlers: map[string]http.HandlerFunc{
+			"/conversations.info": func(w http.ResponseWriter, r *http.Request) {
+				// DMs have no name and carry an is_im flag plus the
+				// counterpart user ID in the "user" field.
+				jsonOK(w, map[string]any{
+					"channel": map[string]any{
+						"id":    "D0ALS43RSKS",
+						"is_im": true,
+						"user":  "UCOUNTERPART",
+						"name":  "",
+					},
+				})
+			},
+			"/users.info": func(w http.ResponseWriter, r *http.Request) {
+				jsonOK(w, map[string]any{
+					"user": map[string]any{
+						"id": "UCOUNTERPART",
+						"profile": map[string]any{
+							"display_name": "DC",
+							"real_name":    "D. Counterpart",
+						},
+					},
+				})
+			},
+		},
+	}).start(t)
+
+	c := newForTest(t, srv)
+	name, err := c.ChannelName(context.Background(), "D0ALS43RSKS")
+	if err != nil {
+		t.Fatalf("ChannelName error: %v", err)
+	}
+	if name != "DC" {
+		t.Errorf("name = %q, want %q (DM should resolve to counterpart display name)", name, "DC")
+	}
+}
+
 func TestRemoveEyesReaction_sendsCorrectRequest(t *testing.T) {
 	var gotName, gotChannel, gotTimestamp string
 	srv := (&fakeSlackServer{

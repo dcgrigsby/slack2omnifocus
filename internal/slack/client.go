@@ -147,8 +147,18 @@ func (c *Client) ChannelName(ctx context.Context, channelID string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("slack conversations.info %s: %w", channelID, err)
 	}
-	name := ch.Name
-	if name == "" {
+	var name string
+	switch {
+	case ch.IsIM && ch.User != "":
+		// DMs have no .Name — use the counterpart's display name instead.
+		counterpart, err := c.DisplayName(ctx, ch.User)
+		if err != nil {
+			return "", fmt.Errorf("resolve DM counterpart for %s: %w", channelID, err)
+		}
+		name = counterpart
+	case ch.Name != "":
+		name = ch.Name
+	default:
 		name = channelID
 	}
 	c.channelNameCache[channelID] = name
