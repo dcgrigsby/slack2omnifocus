@@ -34,6 +34,11 @@ in to your workspace:
    - `groups:history`
    - `im:history`
    - `mpim:history`
+   - `channels:read`
+   - `groups:read`
+   - `im:read`
+   - `mpim:read`
+   - `users:read`
 4. Scroll back to the top and click **Install to Workspace** → **Allow**.
 5. Copy the **User OAuth Token** (starts with `xoxp-…`).
 
@@ -118,3 +123,7 @@ matches the sibling `omnifocal` project.
   a Bot Token (`xoxb-…`) instead of a User Token (`xoxp-…`). Reinstall
   the app and copy the User OAuth Token from the top of the OAuth &
   Permissions page.
+- **`missing_scope` in the stderr log:** slack2omnifocus called a Slack
+  API method whose scope your token doesn't have. Add the missing scope
+  on the app's OAuth & Permissions page and click **Install to
+  Workspace** again to refresh the token.

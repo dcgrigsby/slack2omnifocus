@@ -68,6 +68,11 @@ Data flow for a single reacted message:
 - `groups:history` — read message content in private channels
 - `im:history` — read message content in DMs
 - `mpim:history` — read message content in group DMs
+- `channels:read` — resolve public channel IDs to names via `conversations.info`
+- `groups:read` — resolve private channel IDs to names via `conversations.info`
+- `im:read` — resolve DM IDs to names via `conversations.info`
+- `mpim:read` — resolve group DM IDs to names via `conversations.info`
+- `users:read` — resolve sender user IDs to display names via `users.info`
 
 ### Slack app setup — step-by-step (one-time, in the browser)
 
