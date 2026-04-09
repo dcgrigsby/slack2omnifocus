@@ -82,7 +82,7 @@ All steps happen at <https://api.slack.com/apps> while signed in to the target S
 
 2. **Navigate to OAuth & Permissions.** Left sidebar → **Features** → **OAuth & Permissions**.
 
-3. **Add user token scopes.** Scroll down to the **Scopes** section. Under **User Token Scopes** (not Bot Token Scopes — we don't use those), click **Add an OAuth Scope** once per scope and add all six listed above.
+3. **Add user token scopes.** Scroll down to the **Scopes** section. Under **User Token Scopes** (not Bot Token Scopes — we don't use those), click **Add an OAuth Scope** once per scope and add all eleven listed above.
 
 4. **Install the app to your workspace.** Scroll back to the top of the OAuth & Permissions page and click **Install to Workspace**. Slack shows a consent screen listing the scopes. Click **Allow**.
 
