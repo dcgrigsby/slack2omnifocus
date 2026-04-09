@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -240,8 +239,5 @@ func newForTest(t *testing.T, fakeURL string) *Client {
 	if err != nil {
 		t.Fatalf("NewWithURL error: %v", err)
 	}
-	// Bypass the xoxp- prefix assertion when tests hit methods; tests pass
-	// a valid xoxp- token anyway.
-	_ = strings.TrimSpace // touch imports
 	return c
 }

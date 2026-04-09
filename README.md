@@ -87,6 +87,10 @@ and your 👀 reaction should disappear from the Slack message.
 
 ### 6. Install the launchd job
 
+The plist hardcodes `/Users/dan/slack2omnifocus/.env.local` in its
+`ProgramArguments`. If your repo lives elsewhere, edit that path in
+`launchd/com.slack2omnifocus.poll.plist` before copying it.
+
 ```bash
 cp launchd/com.slack2omnifocus.poll.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.slack2omnifocus.poll.plist
