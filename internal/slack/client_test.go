@@ -107,6 +107,18 @@ func TestListEyesReactions_filtersByEmojiAndSelf(t *testing.T) {
 								},
 							},
 						},
+						{
+							// Non-message item type (e.g. a file) — must be filtered out
+							// even if the current user reacted with :eyes:.
+							"type":    "file",
+							"channel": "C3",
+							"file": map[string]any{
+								"id": "F1",
+							},
+							"reactions": []map[string]any{
+								{"name": "eyes", "count": 1, "users": []string{"USELF"}},
+							},
+						},
 					},
 					"response_metadata": map[string]any{"next_cursor": ""},
 				})

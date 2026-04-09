@@ -20,6 +20,11 @@ type ReactedMessage struct {
 }
 
 // Client talks to the Slack Web API with a user OAuth token.
+//
+// Not safe for concurrent use: the display-name and channel-name caches
+// are plain maps with no synchronization. slack2omnifocus's poll loop is
+// single-threaded, so a Client instance lives for one poll run and is
+// not shared across goroutines.
 type Client struct {
 	api *slackgo.Client
 
