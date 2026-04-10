@@ -13,7 +13,7 @@ import (
 )
 
 // ReactedMessage is the slack2omnifocus-internal representation of one
-// Slack message that the current user has reacted to with 👀.
+// Slack message that the current user has reacted to with the configured reaction.
 type ReactedMessage struct {
 	Channel      string // e.g. "C024BE91L"
 	Timestamp    string // e.g. "1712345678.123456"
@@ -28,25 +28,28 @@ type ReactedMessage struct {
 // single-threaded, so a Client instance lives for one poll run and is
 // not shared across goroutines.
 type Client struct {
-	api *slackgo.Client
+	api      *slackgo.Client
+	reaction string
 
 	userNameCache    map[string]string
 	channelNameCache map[string]string
 }
 
 // New returns a Client bound to the real Slack API.
-func New(token string) *Client {
+func New(token, reaction string) *Client {
 	return &Client{
 		api:              slackgo.New(token),
+		reaction:         reaction,
 		userNameCache:    map[string]string{},
 		channelNameCache: map[string]string{},
 	}
 }
 
 // NewWithURL returns a Client bound to a custom API URL (used by tests).
-func NewWithURL(token, apiURL string) (*Client, error) {
+func NewWithURL(token, apiURL, reaction string) (*Client, error) {
 	return &Client{
 		api:              slackgo.New(token, slackgo.OptionAPIURL(apiURL)),
+		reaction:         reaction,
 		userNameCache:    map[string]string{},
 		channelNameCache: map[string]string{},
 	}, nil
@@ -61,10 +64,10 @@ func (c *Client) AuthTest(ctx context.Context) (string, error) {
 	return resp.UserID, nil
 }
 
-// ListEyesReactions returns every message in the authenticated user's
-// reaction history where THAT user's reactions include 👀 (`:eyes:`).
+// ListReactions returns every message in the authenticated user's
+// reaction history where THAT user's reactions include the configured reaction.
 // It paginates through reactions.list.
-func (c *Client) ListEyesReactions(ctx context.Context, selfUserID string) ([]ReactedMessage, error) {
+func (c *Client) ListReactions(ctx context.Context, selfUserID string) ([]ReactedMessage, error) {
 	var out []ReactedMessage
 	cursor := ""
 	for {
@@ -84,7 +87,7 @@ func (c *Client) ListEyesReactions(ctx context.Context, selfUserID string) ([]Re
 			}
 			hasSelfEyes := false
 			for _, r := range it.Reactions {
-				if r.Name != "eyes" {
+				if r.Name != c.reaction {
 					continue
 				}
 				for _, u := range r.Users {
@@ -179,10 +182,10 @@ func (c *Client) Permalink(ctx context.Context, channel, ts string) (string, err
 	return link, nil
 }
 
-// RemoveEyesReaction removes the authenticated user's 👀 reaction from
+// RemoveReaction removes the authenticated user's configured reaction from
 // the given message.
-func (c *Client) RemoveEyesReaction(ctx context.Context, channel, ts string) error {
-	err := c.api.RemoveReactionContext(ctx, "eyes", slackgo.NewRefToMessage(channel, ts))
+func (c *Client) RemoveReaction(ctx context.Context, channel, ts string) error {
+	err := c.api.RemoveReactionContext(ctx, c.reaction, slackgo.NewRefToMessage(channel, ts))
 	if err != nil {
 		return fmt.Errorf("slack reactions.remove: %w", err)
 	}

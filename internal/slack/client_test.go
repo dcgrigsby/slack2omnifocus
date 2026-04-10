@@ -57,7 +57,7 @@ func TestAuthTest_returnsUserID(t *testing.T) {
 	}
 }
 
-func TestListEyesReactions_filtersByEmojiAndSelf(t *testing.T) {
+func TestListReactions_filtersByEmojiAndSelf(t *testing.T) {
 	// reactions.list returns three items:
 	//   1. message with :eyes: by us (and someone else) — INCLUDED
 	//   2. message with :eyes: by someone else only — EXCLUDED
@@ -126,9 +126,9 @@ func TestListEyesReactions_filtersByEmojiAndSelf(t *testing.T) {
 	}).start(t)
 
 	c := newForTest(t, srv)
-	items, err := c.ListEyesReactions(context.Background(), "USELF")
+	items, err := c.ListReactions(context.Background(), "USELF")
 	if err != nil {
-		t.Fatalf("ListEyesReactions error: %v", err)
+		t.Fatalf("ListReactions error: %v", err)
 	}
 	if len(items) != 1 {
 		t.Fatalf("got %d items, want 1\nitems: %+v", len(items), items)
@@ -242,7 +242,7 @@ func TestChannelName_DMUsesCounterpartDisplayName(t *testing.T) {
 	}
 }
 
-func TestRemoveEyesReaction_sendsCorrectRequest(t *testing.T) {
+func TestRemoveReaction_sendsCorrectRequest(t *testing.T) {
 	var gotName, gotChannel, gotTimestamp string
 	srv := (&fakeSlackServer{
 		handlers: map[string]http.HandlerFunc{
@@ -257,8 +257,8 @@ func TestRemoveEyesReaction_sendsCorrectRequest(t *testing.T) {
 	}).start(t)
 
 	c := newForTest(t, srv)
-	if err := c.RemoveEyesReaction(context.Background(), "C7", "42.17"); err != nil {
-		t.Fatalf("RemoveEyesReaction error: %v", err)
+	if err := c.RemoveReaction(context.Background(), "C7", "42.17"); err != nil {
+		t.Fatalf("RemoveReaction error: %v", err)
 	}
 	if gotName != "eyes" {
 		t.Errorf("name = %q, want %q", gotName, "eyes")
@@ -446,10 +446,73 @@ func TestFormatText_lookupFailureFallsBackToID(t *testing.T) {
 	}
 }
 
+func TestListReactions_usesConfiguredReactionName(t *testing.T) {
+	srv := (&fakeSlackServer{
+		handlers: map[string]http.HandlerFunc{
+			"/reactions.list": func(w http.ResponseWriter, r *http.Request) {
+				jsonOK(w, map[string]any{
+					"items": []map[string]any{
+						{
+							"type":    "message",
+							"channel": "C1",
+							"message": map[string]any{
+								"type": "message",
+								"ts":   "1.0",
+								"user": "UAUTHOR",
+								"text": "flagged",
+								"reactions": []map[string]any{
+									{"name": "flag", "count": 1, "users": []string{"USELF"}},
+								},
+							},
+						},
+					},
+					"response_metadata": map[string]any{"next_cursor": ""},
+				})
+			},
+		},
+	}).start(t)
+
+	c, err := NewWithURL("xoxp-test-token", srv, "flag")
+	if err != nil {
+		t.Fatalf("NewWithURL error: %v", err)
+	}
+	items, err := c.ListReactions(context.Background(), "USELF")
+	if err != nil {
+		t.Fatalf("ListReactions error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("got %d items, want 1", len(items))
+	}
+}
+
+func TestRemoveReaction_usesConfiguredReactionName(t *testing.T) {
+	var gotName string
+	srv := (&fakeSlackServer{
+		handlers: map[string]http.HandlerFunc{
+			"/reactions.remove": func(w http.ResponseWriter, r *http.Request) {
+				_ = r.ParseForm()
+				gotName = r.FormValue("name")
+				jsonOK(w, map[string]any{})
+			},
+		},
+	}).start(t)
+
+	c, err := NewWithURL("xoxp-test-token", srv, "white_check_mark")
+	if err != nil {
+		t.Fatalf("NewWithURL error: %v", err)
+	}
+	if err := c.RemoveReaction(context.Background(), "C7", "42.17"); err != nil {
+		t.Fatalf("RemoveReaction error: %v", err)
+	}
+	if gotName != "white_check_mark" {
+		t.Errorf("name = %q, want %q", gotName, "white_check_mark")
+	}
+}
+
 // helper to build a Client pointed at the fake server
 func newForTest(t *testing.T, fakeURL string) *Client {
 	t.Helper()
-	c, err := NewWithURL("xoxp-test-token", fakeURL)
+	c, err := NewWithURL("xoxp-test-token", fakeURL, "eyes")
 	if err != nil {
 		t.Fatalf("NewWithURL error: %v", err)
 	}
