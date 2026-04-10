@@ -1,6 +1,6 @@
 # slack2omnifocus
 
-Turn Slack messages into OmniFocus inbox tasks by reacting to them with any emoji.
+Turn Slack messages into OmniFocus inbox tasks by reacting to them with an emoji.
 
 > **Note:** This project was built with [Claude Code](https://claude.ai/code) and is provided as-is with no warranty. See [LICENSE](LICENSE) for details.
 
