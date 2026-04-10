@@ -16,8 +16,8 @@ func (a *PollAdapter) AuthTest(ctx context.Context) (string, error) {
 	return a.Client.AuthTest(ctx)
 }
 
-func (a *PollAdapter) ListEyesReactions(ctx context.Context, selfUserID string) ([]poll.SlackMessage, error) {
-	items, err := a.Client.ListEyesReactions(ctx, selfUserID)
+func (a *PollAdapter) ListReactions(ctx context.Context, selfUserID string) ([]poll.SlackMessage, error) {
+	items, err := a.Client.ListReactions(ctx, selfUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +49,6 @@ func (a *PollAdapter) Permalink(ctx context.Context, channel, ts string) (string
 	return a.Client.Permalink(ctx, channel, ts)
 }
 
-func (a *PollAdapter) RemoveEyesReaction(ctx context.Context, channel, ts string) error {
-	return a.Client.RemoveEyesReaction(ctx, channel, ts)
+func (a *PollAdapter) RemoveReaction(ctx context.Context, channel, ts string) error {
+	return a.Client.RemoveReaction(ctx, channel, ts)
 }

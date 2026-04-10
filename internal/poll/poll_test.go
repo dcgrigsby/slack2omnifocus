@@ -33,7 +33,7 @@ type ref struct {
 func (f *fakeSlack) AuthTest(ctx context.Context) (string, error) {
 	return f.selfUserID, nil
 }
-func (f *fakeSlack) ListEyesReactions(ctx context.Context, selfUserID string) ([]SlackMessage, error) {
+func (f *fakeSlack) ListReactions(ctx context.Context, selfUserID string) ([]SlackMessage, error) {
 	return f.items, f.listErr
 }
 func (f *fakeSlack) DisplayName(ctx context.Context, userID string) (string, error) {
@@ -63,7 +63,7 @@ func (f *fakeSlack) Permalink(ctx context.Context, channel, ts string) (string, 
 	}
 	return "https://example.slack.com/archives/" + channel + "/p" + ts, nil
 }
-func (f *fakeSlack) RemoveEyesReaction(ctx context.Context, channel, ts string) error {
+func (f *fakeSlack) RemoveReaction(ctx context.Context, channel, ts string) error {
 	f.removeCalls = append(f.removeCalls, ref{channel, ts})
 	if f.removeErr != nil {
 		if err, ok := f.removeErr[channel+":"+ts]; ok {
@@ -271,7 +271,7 @@ func TestRun_reactionRemoveFails_stateStillMarked(t *testing.T) {
 	// Critical: state MUST be marked even though reaction removal failed.
 	// This is what guarantees the next poll retries only the removal and
 	// does not re-create the OmniFocus task. If someone ever swaps the
-	// order of store.Mark and slack.RemoveEyesReaction in handleMessage,
+	// order of store.Mark and slack.RemoveReaction in handleMessage,
 	// this test will fail.
 	if !store.Has("C1", "1.0") {
 		t.Error("state should contain C1:1.0 even when reaction removal failed")

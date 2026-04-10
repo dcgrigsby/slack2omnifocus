@@ -11,12 +11,12 @@ import (
 // Compile-time assertion: PollAdapter must satisfy poll.SlackClient.
 var _ poll.SlackClient = (*PollAdapter)(nil)
 
-// TestPollAdapter_ListEyesReactions_fieldMapping verifies that the
+// TestPollAdapter_ListReactions_fieldMapping verifies that the
 // ReactedMessage → poll.SlackMessage conversion inside PollAdapter maps
 // each field to the correct destination. Distinctive values are used so
 // a transposition (e.g. swapping Channel and Timestamp) would fail this
 // test even though it would still compile against the interface.
-func TestPollAdapter_ListEyesReactions_fieldMapping(t *testing.T) {
+func TestPollAdapter_ListReactions_fieldMapping(t *testing.T) {
 	srv := (&fakeSlackServer{
 		handlers: map[string]http.HandlerFunc{
 			"/reactions.list": func(w http.ResponseWriter, r *http.Request) {
@@ -45,9 +45,9 @@ func TestPollAdapter_ListEyesReactions_fieldMapping(t *testing.T) {
 	client := newForTest(t, srv)
 	adapter := &PollAdapter{Client: client}
 
-	msgs, err := adapter.ListEyesReactions(context.Background(), "USELF")
+	msgs, err := adapter.ListReactions(context.Background(), "USELF")
 	if err != nil {
-		t.Fatalf("ListEyesReactions error: %v", err)
+		t.Fatalf("ListReactions error: %v", err)
 	}
 	if len(msgs) != 1 {
 		t.Fatalf("got %d messages, want 1", len(msgs))

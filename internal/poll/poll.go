@@ -1,5 +1,5 @@
-// Package poll orchestrates one slack2omnifocus poll cycle: list 👀-reacted
-// Slack messages, create matching OmniFocus inbox tasks, and remove the 👀
+// Package poll orchestrates one slack2omnifocus poll cycle: list reacted
+// Slack messages, create matching OmniFocus inbox tasks, and remove the
 // reactions from successfully-processed messages.
 package poll
 
@@ -26,12 +26,12 @@ type SlackMessage struct {
 // SlackClient is the slack-facing dependency of Run.
 type SlackClient interface {
 	AuthTest(ctx context.Context) (string, error)
-	ListEyesReactions(ctx context.Context, selfUserID string) ([]SlackMessage, error)
+	ListReactions(ctx context.Context, selfUserID string) ([]SlackMessage, error)
 	DisplayName(ctx context.Context, userID string) (string, error)
 	ChannelName(ctx context.Context, channelID string) (string, error)
 	FormatText(ctx context.Context, text string) string
 	Permalink(ctx context.Context, channel, ts string) (string, error)
-	RemoveEyesReaction(ctx context.Context, channel, ts string) error
+	RemoveReaction(ctx context.Context, channel, ts string) error
 }
 
 // Store is the deduplication-store dependency of Run.
@@ -63,7 +63,7 @@ func Run(
 		return fmt.Errorf("auth.test: %w", err)
 	}
 
-	items, err := slack.ListEyesReactions(ctx, selfUserID)
+	items, err := slack.ListReactions(ctx, selfUserID)
 	if err != nil {
 		return fmt.Errorf("list eyes reactions: %w", err)
 	}
@@ -104,7 +104,7 @@ func handleMessage(
 			slog.String("channel", msg.Channel),
 			slog.String("ts", msg.Timestamp),
 		)
-		return slack.RemoveEyesReaction(ctx, msg.Channel, msg.Timestamp)
+		return slack.RemoveReaction(ctx, msg.Channel, msg.Timestamp)
 	}
 
 	// Enrich with author name, channel name, and permalink.
@@ -147,9 +147,9 @@ func handleMessage(
 		return fmt.Errorf("mark state: %w", err)
 	}
 
-	if err := slack.RemoveEyesReaction(ctx, msg.Channel, msg.Timestamp); err != nil {
+	if err := slack.RemoveReaction(ctx, msg.Channel, msg.Timestamp); err != nil {
 		// State is already marked; next poll will retry removal.
-		return fmt.Errorf("remove eyes reaction: %w", err)
+		return fmt.Errorf("remove reaction: %w", err)
 	}
 	return nil
 }
