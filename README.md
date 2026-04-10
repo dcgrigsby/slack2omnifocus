@@ -13,6 +13,11 @@ containing the message text, sender, channel, and a permalink back to the
 original conversation. It then removes the reaction as confirmation. If
 OmniFocus isn't running, reactions stay put and get retried on the next poll.
 
+Processed messages are tracked in a state file at
+`~/.local/state/slack2omnifocus/processed-<hash>.txt` (where `<hash>` is
+derived from your token) so that tasks are never created twice, even if the
+reaction removal fails.
+
 ## Prerequisites
 
 - macOS with OmniFocus installed
