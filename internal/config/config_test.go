@@ -5,50 +5,58 @@ import (
 	"testing"
 )
 
-func TestLoad_happyPath(t *testing.T) {
-	t.Setenv("SLACK_TOKEN", "xoxp-test-token-123")
-
-	cfg, err := Load()
+func TestNew_happyPath(t *testing.T) {
+	cfg, err := New("xoxp-test-token-123", "eyes")
 	if err != nil {
-		t.Fatalf("Load() returned unexpected error: %v", err)
+		t.Fatalf("New() returned unexpected error: %v", err)
 	}
-	if cfg.SlackToken != "xoxp-test-token-123" {
-		t.Errorf("SlackToken = %q, want %q", cfg.SlackToken, "xoxp-test-token-123")
+	if cfg.Token != "xoxp-test-token-123" {
+		t.Errorf("Token = %q, want %q", cfg.Token, "xoxp-test-token-123")
 	}
-}
-
-func TestLoad_missingToken(t *testing.T) {
-	t.Setenv("SLACK_TOKEN", "")
-
-	_, err := Load()
-	if err == nil {
-		t.Fatal("Load() with empty SLACK_TOKEN returned nil error, want error")
-	}
-	if !strings.Contains(err.Error(), "SLACK_TOKEN") {
-		t.Errorf("error message does not mention SLACK_TOKEN: %v", err)
+	if cfg.Reaction != "eyes" {
+		t.Errorf("Reaction = %q, want %q", cfg.Reaction, "eyes")
 	}
 }
 
-func TestLoad_wrongTokenPrefix(t *testing.T) {
-	t.Setenv("SLACK_TOKEN", "xoxb-bot-token-should-be-rejected")
-
-	_, err := Load()
+func TestNew_emptyToken(t *testing.T) {
+	_, err := New("", "eyes")
 	if err == nil {
-		t.Fatal("Load() with xoxb- token returned nil error, want error")
+		t.Fatal("New() with empty token returned nil error, want error")
+	}
+	if !strings.Contains(err.Error(), "token") {
+		t.Errorf("error message does not mention token: %v", err)
+	}
+}
+
+func TestNew_wrongTokenPrefix(t *testing.T) {
+	_, err := New("xoxb-bot-token-should-be-rejected", "eyes")
+	if err == nil {
+		t.Fatal("New() with xoxb- token returned nil error, want error")
 	}
 	if !strings.Contains(err.Error(), "xoxp-") {
 		t.Errorf("error message does not mention xoxp-: %v", err)
 	}
 }
 
-func TestLoad_trimsWhitespace(t *testing.T) {
-	t.Setenv("SLACK_TOKEN", "  xoxp-padded-token  \n")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() returned unexpected error: %v", err)
+func TestNew_emptyReaction(t *testing.T) {
+	_, err := New("xoxp-test-token-123", "")
+	if err == nil {
+		t.Fatal("New() with empty reaction returned nil error, want error")
 	}
-	if cfg.SlackToken != "xoxp-padded-token" {
-		t.Errorf("SlackToken = %q, want trimmed %q", cfg.SlackToken, "xoxp-padded-token")
+	if !strings.Contains(err.Error(), "reaction") {
+		t.Errorf("error message does not mention reaction: %v", err)
+	}
+}
+
+func TestNew_trimsWhitespace(t *testing.T) {
+	cfg, err := New("  xoxp-padded-token  \n", "  eyes  ")
+	if err != nil {
+		t.Fatalf("New() returned unexpected error: %v", err)
+	}
+	if cfg.Token != "xoxp-padded-token" {
+		t.Errorf("Token = %q, want trimmed %q", cfg.Token, "xoxp-padded-token")
+	}
+	if cfg.Reaction != "eyes" {
+		t.Errorf("Reaction = %q, want trimmed %q", cfg.Reaction, "eyes")
 	}
 }
