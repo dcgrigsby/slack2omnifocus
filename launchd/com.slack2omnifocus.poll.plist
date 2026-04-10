@@ -7,9 +7,12 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/sh</string>
-        <string>-c</string>
-        <string>set -a; . /Users/dan/slack2omnifocus/.env.local; exec /Users/dan/.local/bin/slack2omnifocus poll</string>
+        <string>/usr/local/bin/slack2omnifocus</string>
+        <string>poll</string>
+        <string>--token</string>
+        <string>YOUR_TOKEN_HERE</string>
+        <string>--reaction</string>
+        <string>YOUR_REACTION_HERE</string>
     </array>
 
     <key>StartInterval</key>
