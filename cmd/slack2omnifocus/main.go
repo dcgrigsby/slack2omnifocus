@@ -1,10 +1,12 @@
-// Command slack2omnifocus turns 👀-reacted Slack messages into OmniFocus
-// inbox tasks. See docs/plans/2026-04-09-slack2omnifocus-design.md for
-// the full design.
+// Command slack2omnifocus turns reacted Slack messages into OmniFocus
+// inbox tasks. See docs/plans/ for design documents.
 package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -30,12 +32,14 @@ func main() {
 
 	switch os.Args[1] {
 	case "poll":
-		if err := runPoll(); err != nil {
+		cfg := parseFlags("poll", os.Args[2:])
+		if err := runPoll(cfg); err != nil {
 			slog.Error("poll failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 	case "doctor":
-		if err := runDoctor(); err != nil {
+		cfg := parseFlags("doctor", os.Args[2:])
+		if err := runDoctor(cfg); err != nil {
 			slog.Error("doctor failed", slog.Any("error", err))
 			os.Exit(1)
 		}
@@ -48,66 +52,67 @@ func main() {
 	}
 }
 
+func parseFlags(cmd string, args []string) config.Config {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	token := fs.String("token", "", "Slack user OAuth token (xoxp-...)")
+	reaction := fs.String("reaction", "", "Slack reaction name to watch (e.g. eyes, white_check_mark)")
+	fs.Parse(args)
+
+	cfg, err := config.New(*token, *reaction)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n\n", err)
+		fs.Usage()
+		os.Exit(2)
+	}
+	return cfg
+}
+
 func usage() {
-	fmt.Fprint(os.Stderr, `slack2omnifocus — turn 👀-reacted Slack messages into OmniFocus inbox tasks
+	fmt.Fprint(os.Stderr, `slack2omnifocus — turn reacted Slack messages into OmniFocus inbox tasks
 
 Usage:
-  slack2omnifocus poll     run one poll cycle and exit
-  slack2omnifocus doctor   sanity-check setup (token, OmniFocus, state file)
-  slack2omnifocus help     show this message
+  slack2omnifocus poll   --token xoxp-... --reaction eyes
+  slack2omnifocus doctor --token xoxp-... --reaction eyes
+  slack2omnifocus help
 
-Configuration is read from environment variables; create .env.local in
-the repo root with `+"`export SLACK_TOKEN=xoxp-...`"+` and let direnv load it,
-or use the sh -c wrapper in the provided launchd plist.
+Flags:
+  --token      Slack user OAuth token (starts with xoxp-)
+  --reaction   Slack reaction name to watch (e.g. eyes, white_check_mark)
 `)
 }
 
-func runPoll() error {
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-
-	slackClient := slack.New(cfg.SlackToken)
+func runPoll(cfg config.Config) error {
+	slackClient := slack.New(cfg.Token, cfg.Reaction)
 	adapter := &slack.PollAdapter{Client: slackClient}
 	runner := omnifocus.OsascriptRunner{}
 
-	statePath, err := defaultStatePath()
+	sp, err := defaultStatePath(cfg.Token)
 	if err != nil {
 		return err
 	}
-	store, err := state.Open(statePath)
+	store, err := state.Open(sp)
 	if err != nil {
 		return err
 	}
 
-	// Bound the poll cycle so a stuck Slack call or a hung osascript
-	// cannot outlive its launchd slot. 4 minutes leaves 1 minute of
-	// headroom before the next 5-minute cycle fires.
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
 	return poll.Run(ctx, adapter, runner, store, omnifocus.IsRunning)
 }
 
-func runDoctor() error {
+func runDoctor(cfg config.Config) error {
 	failures := 0
 
-	cfg, cfgErr := config.Load()
-	if cfgErr != nil {
-		fmt.Fprintln(os.Stderr, "✗ config:", cfgErr)
+	fmt.Println("✓ config validated (token prefix OK, reaction set)")
+
+	client := slack.New(cfg.Token, cfg.Reaction)
+	userID, err := client.AuthTest(context.Background())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "✗ slack auth.test:", err)
 		failures++
 	} else {
-		fmt.Println("✓ SLACK_TOKEN loaded (prefix OK)")
-
-		client := slack.New(cfg.SlackToken)
-		userID, err := client.AuthTest(context.Background())
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "✗ slack auth.test:", err)
-			failures++
-		} else {
-			fmt.Printf("✓ Slack auth.test OK (user_id=%s)\n", userID)
-		}
+		fmt.Printf("✓ Slack auth.test OK (user_id=%s)\n", userID)
 	}
 
 	if omnifocus.IsRunning() {
@@ -116,14 +121,15 @@ func runDoctor() error {
 		fmt.Println("⚠ OmniFocus is NOT running — poll will skip until it is")
 	}
 
-	if statePath, err := defaultStatePath(); err != nil {
+	sp, err := defaultStatePath(cfg.Token)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "✗ state path:", err)
 		failures++
-	} else if _, err := state.Open(statePath); err != nil {
+	} else if _, err := state.Open(sp); err != nil {
 		fmt.Fprintln(os.Stderr, "✗ state file:", err)
 		failures++
 	} else {
-		fmt.Printf("✓ State file writable at %s\n", statePath)
+		fmt.Printf("✓ State file writable at %s\n", sp)
 	}
 
 	if failures > 0 {
@@ -132,10 +138,16 @@ func runDoctor() error {
 	return nil
 }
 
-func defaultStatePath() (string, error) {
+func defaultStatePath(token string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("determine home dir: %w", err)
 	}
-	return filepath.Join(home, ".local", "state", "slack2omnifocus", "processed.txt"), nil
+	return statePath(home, token), nil
+}
+
+func statePath(home, token string) string {
+	h := sha256.Sum256([]byte(token))
+	tag := hex.EncodeToString(h[:])[:8]
+	return filepath.Join(home, ".local", "state", "slack2omnifocus", "processed-"+tag+".txt")
 }
