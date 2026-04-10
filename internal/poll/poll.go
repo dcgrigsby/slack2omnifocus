@@ -65,7 +65,7 @@ func Run(
 
 	items, err := slack.ListReactions(ctx, selfUserID)
 	if err != nil {
-		return fmt.Errorf("list eyes reactions: %w", err)
+		return fmt.Errorf("list reactions: %w", err)
 	}
 
 	slog.Info("poll cycle starting",

@@ -85,22 +85,22 @@ func (c *Client) ListReactions(ctx context.Context, selfUserID string) ([]Reacte
 			if it.Type != "message" || it.Message == nil {
 				continue
 			}
-			hasSelfEyes := false
+			hasSelfReaction := false
 			for _, r := range it.Reactions {
 				if r.Name != c.reaction {
 					continue
 				}
 				for _, u := range r.Users {
 					if u == selfUserID {
-						hasSelfEyes = true
+						hasSelfReaction = true
 						break
 					}
 				}
-				if hasSelfEyes {
+				if hasSelfReaction {
 					break
 				}
 			}
-			if !hasSelfEyes {
+			if !hasSelfReaction {
 				continue
 			}
 			out = append(out, ReactedMessage{
